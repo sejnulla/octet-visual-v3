@@ -142,8 +142,7 @@ hr.div{border:none;border-top:1px solid #e8e8e8;margin:6px 0}
     <div class="sh op" onclick="tog(this)">Presets <span class="ar">▲</span></div>
     <div class="sb op">
       <div class="preset-row">
-        <select id="preset-sel"><option value="">— select preset —</option></select>
-        <button class="btn sm" onclick="loadPreset()">Load</button>
+        <select id="preset-sel" onchange="loadPreset()"><option value="">— select preset —</option></select>
         <button class="btn sm del" onclick="deletePreset()">✕</button>
       </div>
       <button class="btn" onclick="showSaveForm()">Save current as preset…</button>
