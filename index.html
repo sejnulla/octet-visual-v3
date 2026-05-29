@@ -126,7 +126,7 @@ hr.div{border:none;border-top:1px solid #e8e8e8;margin:6px 0}
       <div id="iv" style="display:none">
         <div class="drop" onclick="document.getElementById('vf').click()">Click or drop video</div>
         <input type="file" id="vf" accept="video/*" style="display:none" onchange="loadVid(event)">
-        <video id="vp" controls></video>
+        <video id="vp" controls loop></video>
         <button class="btn" style="margin-top:6px" onclick="loadExampleVid()">▶ Load example video</button>
         <div class="tog-row" style="margin-top:7px">
           <span style="font-size:11px"><span class="live-dot"></span>Live (while playing)</span>
@@ -134,6 +134,27 @@ hr.div{border:none;border-top:1px solid #e8e8e8;margin:6px 0}
         </div>
         <button class="btn" style="margin-top:2px" onclick="processFrame()">Process current frame</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Presets -->
+  <div class="sec">
+    <div class="sh op" onclick="tog(this)">Presets <span class="ar">▲</span></div>
+    <div class="sb op">
+      <div class="preset-row">
+        <select id="preset-sel"><option value="">— select preset —</option></select>
+        <button class="btn sm" onclick="loadPreset()">Load</button>
+        <button class="btn sm del" onclick="deletePreset()">✕</button>
+      </div>
+      <button class="btn" onclick="showSaveForm()">Save current as preset…</button>
+      <div id="save-form" style="display:none;margin-top:5px">
+        <div class="row">
+          <input type="text" id="preset-name" placeholder="Preset name…" style="flex:1;border:1px solid #ccc;border-radius:4px;padding:4px 7px;font-size:11px">
+          <button class="btn sm pri" style="margin-left:4px" onclick="confirmSave()">Save</button>
+          <button class="btn sm" onclick="hideSaveForm()">✕</button>
+        </div>
+      </div>
+      <div id="preset-info" style="font-size:10px;color:#888;margin-top:4px"></div>
     </div>
   </div>
 
@@ -166,27 +187,6 @@ hr.div{border:none;border-top:1px solid #e8e8e8;margin:6px 0}
     <div class="sh" onclick="tog(this)">Background <span class="ar">▼</span></div>
     <div class="sb">
       <div class="field"><label class="lbl">Color</label><input type="color" id="bgc" value="#000000" oninput="render()"></div>
-    </div>
-  </div>
-
-  <!-- Presets -->
-  <div class="sec">
-    <div class="sh" onclick="tog(this)">Presets <span class="ar">▼</span></div>
-    <div class="sb">
-      <div class="preset-row">
-        <select id="preset-sel"><option value="">— select preset —</option></select>
-        <button class="btn sm" onclick="loadPreset()">Load</button>
-        <button class="btn sm del" onclick="deletePreset()">✕</button>
-      </div>
-      <button class="btn" onclick="showSaveForm()">Save current as preset…</button>
-      <div id="save-form" style="display:none;margin-top:5px">
-        <div class="row">
-          <input type="text" id="preset-name" placeholder="Preset name…" style="flex:1;border:1px solid #ccc;border-radius:4px;padding:4px 7px;font-size:11px">
-          <button class="btn sm pri" style="margin-left:4px" onclick="confirmSave()">Save</button>
-          <button class="btn sm" onclick="hideSaveForm()">✕</button>
-        </div>
-      </div>
-      <div id="preset-info" style="font-size:10px;color:#888;margin-top:4px"></div>
     </div>
   </div>
 
