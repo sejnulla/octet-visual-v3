@@ -747,21 +747,16 @@ function loadVid(e) {
 
 function processFrame() { if(src?.tagName==='VIDEO') render(); }
 
-async function loadExampleImg(stateOverride) {
-  try {
-    const resp = await fetch('./media/flower.jpg');
-    if (!resp.ok) throw new Error('not found');
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      stopLive(); src = img; offC = null;
-      const t = document.getElementById('ith'); t.src = url; t.style.display = 'block';
-      applyState(stateOverride || DEFAULT_PRESET); render();
-    };
-    img.src = url;
-    switchInput('img');
-  } catch(e) { /* example media not available on this host — silent */ }
+function loadExampleImg(stateOverride) {
+  const img = new Image();
+  img.onload = () => {
+    stopLive(); src = img; offC = null;
+    const t = document.getElementById('ith'); t.src = img.src; t.style.display = 'block';
+    applyState(stateOverride || DEFAULT_PRESET); render();
+  };
+  img.onerror = () => {}; // media folder not present — silent
+  img.src = './media/flower.jpg';
+  switchInput('img');
 }
 
 async function loadExampleVid() {
