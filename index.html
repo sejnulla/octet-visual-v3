@@ -730,13 +730,13 @@ const STATES = [
     noise:{ speed:0.6, scale:7, detail:3, contrast:42 },
     life:{ speed:9, scale:90, decay:55, density:32 },
     pointer:{ on:true, size:26, fade:6 },
-    trail:{ on:true, amount:100 },
-    preset:{ bgc:'#f6f1ea', td:'15', ts:'174', tm:'221', th:'250', layers:[
-      L('d','surface','random-gradient',15,13,0),
-      L('s','sunset','random-gradient',15,72,0),
-      L('m','bloom','random-gradient',15,68,0),
-      L('h','bloom','random-gradient',15,78,0),
-      L('b','forest','random-gradient',15,72,0),
+    trail:{ on:false, amount:100 },
+    preset:{ bgc:'#f6f1ea', td:'4', ts:'55', tm:'157', th:'251', layers:[
+      L('d','forest','random-gradient',32,25,0),
+      L('s','surface','random-gradient',32,100,0),
+      L('m','sunset','random-gradient',32,82,0,{sg:true}),
+      L('h','sunset','solid-brightness',10,90,22,{en:false}),
+      L('b','bloom','random-gradient',33,21,0),
     ]}
   },
   { // ── Second · video ──
@@ -744,13 +744,13 @@ const STATES = [
     noise:{ speed:0.5, scale:6, detail:3, contrast:40 },
     life:{ speed:9, scale:90, decay:55, density:32 },
     pointer:{ on:true, size:26, fade:6 },
-    trail:{ on:true, amount:100 },
-    preset:{ bgc:'#ededed', td:'0', ts:'57', tm:'118', th:'255', layers:[
-      L('d','custom','solid',40,100,0,{c1:'#f2f2f2',sw:'1',sc:'#d4d4d4',en:false}),
-      L('s','sunset','random-gradient',25,87,0,{sg:true,en:false}),
-      L('m','surface','random-gradient',25,88,0,{sg:true}),
-      L('h','bloom','random-gradient',4,90,0,{sg:true}),
-      L('b','forest','solid-brightness',40,95,0,{en:false}),
+    trail:{ on:false, amount:100 },
+    preset:{ bgc:'#f6f1ea', td:'13', ts:'75', tm:'143', th:'252', layers:[
+      L('d','forest','solid',7,100,0),
+      L('s','surface','random-gradient',32,100,0),
+      L('m','sunset','solid-brightness',5,82,0,{sg:true}),
+      L('h','sunset','solid-brightness',10,90,22,{en:false}),
+      L('b','bloom','random-gradient',21,21,0),
     ]}
   },
   { // ── Third · video ──
@@ -758,13 +758,13 @@ const STATES = [
     noise:{ speed:0.4, scale:5, detail:2, contrast:55 },
     life:{ speed:9, scale:90, decay:55, density:32 },
     pointer:{ on:false, size:26, fade:6 },
-    trail:{ on:true, amount:100 },
-    preset:{ bgc:'#f6f1ea', td:'20', ts:'51', tm:'106', th:'13', layers:[
-      L('d','surface','gradient-cell',73,89,0,{sg:true}),
-      L('s','sunset','solid',53,92,0,{sw:'2',sg:true,en:false}),
-      L('m','forest','gradient-cell',34,72,0),
-      L('h','bloom','solid',59,89,0,{sw:'2',sg:true}),
-      L('b','surface','solid-brightness',12,100,0,{sw:'11',sc:'#8a1919',sg:true}),
+    trail:{ on:false, amount:100 },
+    preset:{ bgc:'#f6f1ea', td:'13', ts:'75', tm:'143', th:'252', layers:[
+      L('d','forest','solid',7,100,0),
+      L('s','surface','random-gradient',32,100,0),
+      L('m','sunset','solid-brightness',5,82,0,{sg:true}),
+      L('h','sunset','solid-brightness',10,90,22,{en:false}),
+      L('b','bloom','random-gradient',21,21,0),
     ]}
   },
 ];
@@ -1003,8 +1003,8 @@ for (let i = 0; i < 3; i++) {
 }
 /* Seed sections 2 & 3 with their videos until the user uploads a replacement */
 function seedVideo(i, src){ vids[i].src = src; vids[i].play().catch(()=>{}); }
-seedVideo(1, './media/section2c.mp4');
-seedVideo(2, './media/section3b.mp4');
+seedVideo(1, './media/v3section2.mp4');
+seedVideo(2, './media/v3section3.mp4');
 
 /* ══ Scatter cache (rebuilt when ps/dn/jt of a layer change) ══════ */
 const SCAT = {};
@@ -1053,13 +1053,14 @@ function lerpAes(A, B, t){
    Structural params (ps/dn/jt/mode/en) snap to the target instantly;
    aesthetic params tween from the displayed snapshot to the target. */
 const TWEEN_MS = 900;
-let liveIdx = 0;
+let liveIdx = 0, fromIdx = 0;
 let tweening = false, tweenStart = 0, clearOnce = true;
 let fromAes = aesOf(STATES[0]), toAes = aesOf(STATES[0]), curAes = aesOf(STATES[0]);
 
 function transitionTo(idx){
   if (idx === liveIdx && !tweening) return;
   fromAes = curAes;                 // start from whatever is on screen right now
+  fromIdx = liveIdx;                // remember the section we're leaving for the cross-fade
   liveIdx = idx;
   toAes = aesOf(STATES[idx]);
   ensureScatter(idx);
@@ -1070,20 +1071,83 @@ function transitionTo(idx){
   updateLiveTabUI();
 }
 
-/* ══ Renderer ═════════════════════════════════════════════════════ */
-function renderFrame(aes, px){
-  const st = STATES[liveIdx];
+/* ══ 2↔3 bridge: one-shot image sequence ══════════════════════════
+   A short frame sequence that plays once forward when entering
+   Section 3 from Section 2, and backward on the way back; reversing
+   mid-play picks up from the current frame. While it plays its frames
+   feed the pixelator; when it finishes the destination section's loop
+   takes over. Set BRIDGE.count to the frame count once the files
+   exist (0 = disabled → instant handoff, current behaviour).         */
+const BRIDGE = {
+  base: './media/bridge/bridge_',   // frames: bridge_000.jpg, bridge_001.jpg, … (0-indexed)
+  ext:  '.jpg',
+  pad:  3,
+  count: 36,                        // number of frames in media/bridge/
+  fps:  30,                         // playback speed of the one-shot (36 @ 30fps ≈ 1.2s)
+  fromIdx: 1, toIdx: 2,             // sits between Section 2 (state 1) and Section 3 (state 2)
+};
+const bridgeFrames = [];
+let bridgeLoaded = 0;
+function loadBridge(){
+  bridgeFrames.length = 0; bridgeLoaded = 0;
+  for (let i = 0; i < BRIDGE.count; i++) {
+    const img = new Image();
+    img.onload = () => { bridgeLoaded++; };
+    img.src = BRIDGE.base + String(i).padStart(BRIDGE.pad, '0') + BRIDGE.ext;
+    bridgeFrames.push(img);
+  }
+}
+loadBridge();
+function bridgeReady(){ return BRIDGE.count > 0 && bridgeLoaded >= BRIDGE.count; }
 
-  // Background fill — trail mode fades the previous frame instead of wiping it,
-  // leaving motion trails behind moving cells.
+const bridge = { active:false, dir:1, frame:0, acc:0, target:1 };
+function startBridge(dir, target){
+  if (!bridge.active) bridge.frame = dir > 0 ? 0 : BRIDGE.count - 1;
+  bridge.active = true; bridge.dir = dir; bridge.target = target; bridge.acc = 0;
+}
+function advanceBridge(dt){
+  if (!bridge.active) return;
+  bridge.acc += dt * BRIDGE.fps;
+  const step = Math.floor(bridge.acc);
+  if (step > 0) { bridge.acc -= step; bridge.frame += bridge.dir * step; }
+  if (bridge.dir > 0 && bridge.frame >= BRIDGE.count - 1) { bridge.frame = BRIDGE.count - 1; bridge.active = false; }
+  if (bridge.dir < 0 && bridge.frame <= 0)               { bridge.frame = 0;               bridge.active = false; }
+}
+
+/* Route a section change; intercept the 2↔3 crossing through the bridge. */
+function goToSection(idx){
+  const from = liveIdx;
+  if (bridgeReady() &&
+     ((from === BRIDGE.fromIdx && idx === BRIDGE.toIdx) ||
+      (from === BRIDGE.toIdx   && idx === BRIDGE.fromIdx))) {
+    startBridge(idx === BRIDGE.toIdx ? +1 : -1, idx);
+  }
+  transitionTo(idx);   // tween the pixelation preset toward the destination in parallel
+}
+
+/* ══ Renderer ═════════════════════════════════════════════════════
+   renderLook draws one section's complete look (bg + pixelated cells)
+   into an arbitrary context. Two offscreen buffers let us render the
+   "from" and "to" sections and cross-fade between them during a
+   transition, so ALL settings tween — pixel size, density, mode and
+   colour — not just the aesthetic params.                            */
+const bufA = document.createElement('canvas'); bufA.width = CW; bufA.height = CH;
+const bufB = document.createElement('canvas'); bufB.width = CW; bufB.height = CH;
+const ctxA = bufA.getContext('2d');
+const ctxB = bufB.getContext('2d');
+
+function renderLook(ctx, idx, aes, px, allowTrail){
+  const st = STATES[idx];
+
+  // Background fill — trail mode fades the previous frame instead of wiping it.
   const trail = st.trail;
-  mainCtx.globalAlpha = (trail && trail.on && !clearOnce)
+  ctx.globalAlpha = (allowTrail && trail && trail.on && !clearOnce)
     ? clamp(1 - (trail.amount / 100) * 0.96, 0.04, 1)
     : 1;
-  mainCtx.fillStyle = rgbStr(aes.bg);
-  mainCtx.fillRect(0, 0, CW, CH);
-  mainCtx.globalAlpha = 1;
-  clearOnce = false;
+  ctx.fillStyle = rgbStr(aes.bg);
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.globalAlpha = 1;
+  if (allowTrail) clearOnce = false;
 
   const tDk = aes.td, tSh = aes.ts, tMi = aes.tm, tHi = aes.th;
   const bnd = { d:[0,tDk], s:[tDk,tSh], m:[tSh,tMi], h:[tMi,tHi], b:[tHi,256] };
@@ -1093,7 +1157,7 @@ function renderFrame(aes, px){
     const [lo, hi] = bnd[l.id] || [0,256];
     const ps = +l.ps||30, mode = l.mode||'solid', sw = aes.layers[li].sw, sc = l.sc||'#000';
     const c1 = rgbStr(aes.layers[li].c1), c2 = rgbStr(aes.layers[li].c2);
-    const pts = getScat(liveIdx, l);
+    const pts = getScat(idx, l);
 
     const active = pts.filter(({rx,ry}) => {
       const sx = clamp(~~rx,0,CW-1), sy = clamp(~~ry,0,CH-1), i = (sy*CW+sx)*4;
@@ -1106,24 +1170,24 @@ function renderFrame(aes, px){
       const sx = clamp(~~rx,0,CW-1), sy = clamp(~~ry,0,CH-1), i = (sy*CW+sx)*4;
       const bri = .299*px[i]+.587*px[i+1]+.114*px[i+2];
       const half = ps/2, x = rx-half, y = ry-half;
-      if (mode === 'solid') { mainCtx.fillStyle = c1; }
+      if (mode === 'solid') { ctx.fillStyle = c1; }
       else if (mode === 'gradient-cell') {
-        const g = mainCtx.createLinearGradient(x,y,x+ps,y+ps);
-        g.addColorStop(0,c1); g.addColorStop(1,c2); mainCtx.fillStyle = g;
+        const g = ctx.createLinearGradient(x,y,x+ps,y+ps);
+        g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle = g;
       } else if (mode === 'solid-brightness') {
         const a = aes.layers[li].c1, b = aes.layers[li].c2, tt = bri/255;
-        mainCtx.fillStyle = `rgb(${(a[0]+(b[0]-a[0])*tt)|0},${(a[1]+(b[1]-a[1])*tt)|0},${(a[2]+(b[2]-a[2])*tt)|0})`;
+        ctx.fillStyle = `rgb(${(a[0]+(b[0]-a[0])*tt)|0},${(a[1]+(b[1]-a[1])*tt)|0},${(a[2]+(b[2]-a[2])*tt)|0})`;
       } else {
         const cos = Math.cos(ga)*ps, sin = Math.sin(ga)*ps;
-        const g = mainCtx.createLinearGradient(rx-cos/2,ry-sin/2,rx+cos/2,ry+sin/2);
-        g.addColorStop(0,c1); g.addColorStop(1,c2); mainCtx.fillStyle = g;
+        const g = ctx.createLinearGradient(rx-cos/2,ry-sin/2,rx+cos/2,ry+sin/2);
+        g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle = g;
       }
-      mainCtx.fillRect(x,y,ps,ps);
+      ctx.fillRect(x,y,ps,ps);
     });
 
     if (sw > 0 && !l.sg) {
-      mainCtx.strokeStyle = sc; mainCtx.lineWidth = sw;
-      active.forEach(({rx,ry}) => mainCtx.strokeRect(rx-ps/2,ry-ps/2,ps,ps));
+      ctx.strokeStyle = sc; ctx.lineWidth = sw;
+      active.forEach(({rx,ry}) => ctx.strokeRect(rx-ps/2,ry-ps/2,ps,ps));
     }
   });
 }
@@ -1132,10 +1196,16 @@ function renderFrame(aes, px){
 function samplePixels(tSec, dt){
   const st = STATES[liveIdx];
   let drew = false;
-  if (st.source === 'video') {
+
+  // The one-shot bridge sequence overrides the section source while it plays
+  if (bridge.active && bridgeReady()) {
+    const f = bridgeFrames[clamp(bridge.frame | 0, 0, BRIDGE.count - 1)];
+    if (f && f.complete && f.naturalWidth) { pixCtx.drawImage(f, 0, 0, CW, CH); drew = true; }
+  }
+  if (!drew && st.source === 'video') {
     const v = vids[liveIdx];
     if (v && v.readyState >= 2 && !v.ended && v.videoWidth) { pixCtx.drawImage(v, 0, 0, CW, CH); drew = true; }
-  } else if (st.source === 'life') {
+  } else if (!drew && st.source === 'life') {
     drawLife(st.life || { speed:9, scale:90, decay:55, density:32 }, dt);
     pixCtx.drawImage(lifeCanvas, 0, 0, CW, CH); drew = true;
   }
@@ -1158,17 +1228,28 @@ function frame(ts){
   const dt = prevSec == null ? 0 : Math.min(0.1, tSec - prevSec);
   prevSec = tSec;
 
+  let blending = false, blend = 1;
   if (tweening) {
     const t = clamp((ts - tweenStart) / TWEEN_MS, 0, 1);
-    curAes = lerpAes(fromAes, toAes, easeIO(t));
     if (t >= 1) tweening = false;
-  } else {
-    curAes = aesOf(STATES[liveIdx]);   // read live so panel edits reflect instantly
+    else { blending = true; blend = easeIO(t); }
   }
 
   if (curPointer().on) fadePointer(dt);
+  advanceBridge(dt);
   const px = samplePixels(tSec, dt);
-  renderFrame(curAes, px);
+
+  if (blending) {
+    // Cross-fade the full "from" and "to" looks → every setting tweens.
+    renderLook(ctxA, fromIdx, fromAes, px, false);
+    renderLook(ctxB, liveIdx, toAes, px, false);
+    mainCtx.globalAlpha = 1;       mainCtx.drawImage(bufA, 0, 0);
+    mainCtx.globalAlpha = blend;   mainCtx.drawImage(bufB, 0, 0);
+    mainCtx.globalAlpha = 1;
+  } else {
+    curAes = aesOf(STATES[liveIdx]);   // read live so panel edits reflect instantly
+    renderLook(mainCtx, liveIdx, curAes, px, true);
+  }
 }
 requestAnimationFrame(frame);
 
@@ -1177,7 +1258,7 @@ const observer = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
       const idx = SECTION_MAP[e.target.id];
-      if (idx !== undefined) transitionTo(idx);
+      if (idx !== undefined) goToSection(idx);
     }
   });
 }, { threshold: 0.15 });
